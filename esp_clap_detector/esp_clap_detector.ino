@@ -1,5 +1,5 @@
 const int micPin = 34;      // AO connected to GPIO34
-const int threshold = 0; // Change this after testing
+const int threshold = 0; 
 
 void setup() {
   Serial.begin(115200);

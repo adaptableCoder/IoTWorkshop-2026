@@ -4,7 +4,6 @@ Servo myservo;
 int ECHO = 18;
 int TRIG = 5;
 
-
 void setup() {
   // put your setup code here, to run once:
 pinMode(TRIG, OUTPUT); 
@@ -30,23 +29,21 @@ return distance;
 
 void loop() {
   // put your main code here, to run repeatedly:
+  myservo.write(0);
+  delay(500);
+  Serial.print("The angle now is 0 degrees and the object distance is:"); 
+  Serial.println(getDistance());
+  delay(2000);
 
+  myservo.write(90);
+  delay(500);
+  Serial.print("The angle now is 90 degrees and the object distance is:"); 
+  Serial.println(getDistance());
+  delay(2000);
 
-myservo.write(0);
-delay(500);
-Serial.print("The angle now is 0 degrees and the object distance is:"); 
-Serial.println(getDistance());
-delay(2000);
-
-myservo.write(90);
-delay(500);
-Serial.print("The angle now is 90 degrees and the object distance is:"); 
-Serial.println(getDistance());
-delay(2000);
-
-myservo.write(180);
-delay(500);
-Serial.print("The angle now is 180 degrees and the object distance is:"); 
-Serial.println(getDistance());
-delay(2000);
+  myservo.write(180);
+  delay(500);
+  Serial.print("The angle now is 180 degrees and the object distance is:"); 
+  Serial.println(getDistance());
+  delay(2000);
 }

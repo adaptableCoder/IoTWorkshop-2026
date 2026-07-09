@@ -1,7 +1,16 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+const char* ssid = "NSUT_WIFI";
+const char* password = "";
+
+WebServer server(80);
+
 const int touchSensorPin = 34;   // KY-036 analog out
 const int buzzerPin = 25;        // Active buzzer pin
 int threshold = 2000;            // Adjust as needed
 
+String touchStatus = "WAITING";
 
 // === Luis Fonsi - Despacito (Chorus Hook) ===
 int melody[] = {
@@ -31,22 +40,41 @@ int noteDurations[] = {
 };
 int noteIndex = 0;
 
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='1'>";
+  html += "<title>Melody Buzzer</title>";
+  html += "<style>body{font-family: Arial; text-align: center; margin-top: 50px;}</style></head><body>";
+  html += "<h1>IoT Doorbell</h1>";
+  html += "<h2>Touch Status: " + touchStatus + "</h2>";
+  html += "<br><a href=\"/play\"><button style=\"font-size:24px; padding:15px 30px;\">RING DOORBELL</button></a>";
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
+
+bool webTrigger = false;
+
+void handlePlay() {
+  webTrigger = true;
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(buzzerPin, OUTPUT);
-}
 
-void loop() {
-  int touchValue = analogRead(touchSensorPin);
-  Serial.println(touchValue);
-
-  if (touchValue < threshold) {
-    playCurrentNote();
-  } else {
-    noTone(buzzerPin);  // Silence if not touching
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
   }
+  Serial.println("\nWiFi connected! IP address: ");
+  Serial.println(WiFi.localIP());
 
-  delay(20);
+  server.on("/", handleRoot);
+  server.on("/play", handlePlay);
+  server.begin();
 }
 
 void playCurrentNote() {
@@ -57,9 +85,42 @@ void playCurrentNote() {
 
   int duration = 1290 / noteDurations[noteIndex];
   tone(buzzerPin, melody[noteIndex]);
-  delay(duration);
+  
+  // Custom delay allowing handleClient to run
+  unsigned long start = millis();
+  while(millis() - start < duration) {
+    server.handleClient();
+    delay(1);
+  }
   noTone(buzzerPin);
-  delay(30);  // spacing
-
+  start = millis();
+  while(millis() - start < 30) {
+    server.handleClient();
+    delay(1);
+  }
+  
   noteIndex++;
+}
+
+void loop() {
+  server.handleClient();
+
+  int touchValue = analogRead(touchSensorPin);
+  
+  static unsigned long lastPrint = 0;
+  if (millis() - lastPrint > 500) {
+    Serial.println(touchValue);
+    lastPrint = millis();
+  }
+
+  if (touchValue < threshold || webTrigger) {
+    touchStatus = (webTrigger) ? "WEB TRIGGERED (PLAYING)" : "TOUCHED (PLAYING)";
+    playCurrentNote();
+    if (noteIndex == 0) {
+      webTrigger = false; // Stop when song finishes
+    }
+  } else {
+    touchStatus = "WAITING";
+    noTone(buzzerPin);  // Silence if not touching
+  }
 }

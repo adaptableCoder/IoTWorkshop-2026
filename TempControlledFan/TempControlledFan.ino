@@ -1,5 +1,12 @@
 #include <DHT.h>
 #include <ESP32Servo.h>
+#include <WiFi.h>
+#include <WebServer.h>
+
+const char* ssid = "NSUT_WIFI";
+const char* password = "";
+
+WebServer server(80);
 
 #define DHTPIN 4          // GPIO 4 for DHT11 data
 #define DHTTYPE DHT11     
@@ -8,14 +15,29 @@
 DHT dht(DHTPIN, DHTTYPE);
 Servo fanServo;
 
-// --- CONFIGURATION ---
-const float TEMP_MIN = 25.0;   // Temp where fan starts moving (Slowest sweep)
-const float TEMP_MAX = 35.0;   // Temp where fan hits maximum sweeping speed
+const float TEMP_MIN = 25.0;   
+const float TEMP_MAX = 35.0;   
+const int MAX_DELAY = 45;      
+const int MIN_DELAY = 8;       
+const int STEP_SIZE = 5;       
 
-// Servo timing variables (in milliseconds)
-const int MAX_DELAY = 45;      // Slower step delay (Low RPM)
-const int MIN_DELAY = 8;       // Faster step delay (High RPM)
-const int STEP_SIZE = 5;       // Moving 5 degrees per step for smooth motion
+float currentTemp = 0.0;
+String fanStatus = "IDLE";
+String warningMsg = "";
+
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='2'>";
+  html += "<title>Smart Fan</title>";
+  html += "<style>body{font-family: Arial; text-align: center; margin-top: 50px;}</style></head><body>";
+  html += "<h1>Temperature Controlled Fan</h1>";
+  html += "<h2>Current Temp: " + String(currentTemp, 1) + " &deg;C</h2>";
+  html += "<h2>Fan Status: " + fanStatus + "</h2>";
+  if (warningMsg != "") {
+    html += "<h2 style='color:red;'>" + warningMsg + "</h2>";
+  }
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
 
 void setup() {
   Serial.begin(115200); 
@@ -25,41 +47,50 @@ void setup() {
   ESP32PWM::allocateTimer(1);
   fanServo.setPeriodHertz(50); 
   fanServo.attach(SERVOPIN, 500, 2400); 
-  
-  fanServo.write(0); // Start at home position
-  Serial.println("System Initialized: Variable Speed Servo Fan active.");
+  fanServo.write(0); 
+
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected! IP address: ");
+  Serial.println(WiFi.localIP());
+
+  server.on("/", handleRoot);
+  server.begin();
 }
 
 void loop() {
-  // Read temperature from DHT11
-  float temp = dht.readTemperature();
+  server.handleClient();
 
+  float temp = dht.readTemperature();
   if (isnan(temp)) {
-    Serial.println("Error: Failed to read from DHT11 sensor!");
-    delay(2000);
+    // delay(2000); // Replacing blocking delay
+    unsigned long start = millis();
+    while(millis() - start < 2000) { server.handleClient(); delay(10); }
     return; 
   }
+  currentTemp = temp;
 
-  float estimatedRPM = 0.0;
+  if (temp >= TEMP_MAX) {
+    warningMsg = "WARNING: HIGH TEMPERATURE";
+  } else if (temp >= TEMP_MIN) {
+    warningMsg = "Fan is running to cool down.";
+  } else {
+    warningMsg = "";
+  }
 
-  // Check if temperature is above the starting threshold
   if (temp >= TEMP_MIN) {
-    // Calculate how hot the room is as a percentage (0.0 to 1.0) between our min and max limits
+    fanStatus = "ON";
     float tempPercentage = (temp - TEMP_MIN) / (TEMP_MAX - TEMP_MIN);
-    if (tempPercentage > 1.0) tempPercentage = 1.0; // Cap it at 100%
-
-    // Calculate the delay between steps. Higher temp percentage = smaller delay = faster speed.
+    if (tempPercentage > 1.0) tempPercentage = 1.0; 
     int sweepDelay = MAX_DELAY - (tempPercentage * (MAX_DELAY - MIN_DELAY));
 
-    // --- MATH FOR RPM TELEMETRY ---
-    // A full round trip (0 to 180, and 180 to 0) equals 360 degrees of physical movement.
-    // Total steps per full cycle = (180 / STEP_SIZE) * 2 = 72 steps.
-    // Total time for one full cycle in milliseconds = 72 steps * sweepDelay.
-    // RPM = 60,000 milliseconds (1 minute) divided by the total cycle time.
     float totalCycleTimeMs = (360 / STEP_SIZE) * 2 * sweepDelay;
-    estimatedRPM = 60000.0 / totalCycleTimeMs;
+    float estimatedRPM = 60000.0 / totalCycleTimeMs;
 
-    // --- PRINT DATA BEFORE SWEEP ---
     Serial.print("Temp: ");
     Serial.print(temp, 1);
     Serial.print(" °C | Step Delay: ");
@@ -68,29 +99,27 @@ void loop() {
     Serial.print(estimatedRPM, 1);
     Serial.println(" RPM");
 
-    // --- EXECUTE ONE OSCILLATION CYCLE ---
-    // Sweep forward from 0 to 180 degrees
     for (int angle = 0; angle <= 180; angle += STEP_SIZE) {
       fanServo.write(angle);
-      delay(sweepDelay);
+      unsigned long start = millis();
+      while(millis() - start < sweepDelay) { server.handleClient(); delay(1); }
     }
-    // Sweep backward from 180 to 0 degrees
     for (int angle = 180; angle >= 0; angle -= STEP_SIZE) {
       fanServo.write(angle);
-      delay(sweepDelay);
+      unsigned long start = millis();
+      while(millis() - start < sweepDelay) { server.handleClient(); delay(1); }
     }
-    
   } else {
-    // If room is cool, turn off/idle the fan at 0 degrees
     fanServo.write(0);
-    estimatedRPM = 0.0;
+    fanStatus = "IDLE";
+    float estimatedRPM = 0.0;
 
     Serial.print("Temp: ");
     Serial.print(temp, 1);
     Serial.print(" °C | Fan Status: IDLE | Speed: ");
     Serial.print(estimatedRPM, 1);
     Serial.println(" RPM");
-    
-    delay(2000); // Wait 2 seconds before checking temperature again while idling
+
+    for(int i=0; i<20; i++){ server.handleClient(); delay(100); }
   }
 }

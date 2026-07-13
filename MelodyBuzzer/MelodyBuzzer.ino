@@ -109,7 +109,7 @@ void loop() {
   
   static unsigned long lastPrint = 0;
   if (millis() - lastPrint > 500) {
-    Serial.println(touchValue);
+    // Serial.println(touchValue);
     lastPrint = millis();
   }
 

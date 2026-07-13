@@ -7,7 +7,7 @@ const char* password = "";
 WebServer server(80);
 
 const int micPin = 34;      // AO connected to GPIO34
-const int threshold = 0; 
+const int threshold = 2000; 
 int clapCount = 0;
 
 void handleRoot() {

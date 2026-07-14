@@ -55,7 +55,7 @@ void loop() {
   int isDark = digitalRead(LDR_DIGITAL_PIN);
 
   if (isDark != lastState) {
-    if (isDark == HIGH) {
+    if (isDark == LOW) {
       // ROOM IS DARK: Turn on a cozy ambient color (e.g., Warm Cyan/Blue)
       analogWrite(RED_PIN, 100);
       analogWrite(GREEN_PIN, 150);

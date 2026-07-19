@@ -22,6 +22,7 @@ void handleRoot() {
 
 void setup() {
   Serial.begin(115200);
+  pinMode(micPin, INPUT);
 
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");

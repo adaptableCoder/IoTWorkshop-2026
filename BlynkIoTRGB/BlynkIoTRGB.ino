@@ -5,7 +5,7 @@
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 
-//─── Wi‑Fi & Blynk credentials ─────────────────────────────
+//─── WiFi & Blynk credentials ─────────────────────────────
 char ssid[]     = "NSUT_WIFI";
 char pass[]     = "";
 
@@ -14,7 +14,7 @@ char pass[]     = "";
 #define GREEN_PIN 26
 #define BLUE_PIN 27
 
-// PWM settings: 1 kHz frequency, 8‑bit resolution (0–255)
+// PWM settings: 1 kHz frequency, 8-bit resolution (0-255)
 const int PWM_FREQ      = 10000;
 const int PWM_RES_BITS  = 8;
 
